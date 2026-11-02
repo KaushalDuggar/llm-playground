@@ -1,0 +1,62 @@
+# Facts about each host. Changes rarely.
+#
+# No secrets here, only the NAME of the env var that holds each key, so this
+# file is safe to commit. Which models we use, and who may use them, lives in
+# models.yaml and tiers.yaml.
+#
+# Fields:
+#   base_url         where requests go
+#   key_env          env var holding the key (null: no key needed)
+#   quota_per_model  true: the provider meters each model separately, so one
+#                    model being rate-limited or used up says nothing about
+#                    its other models. false: one meter for the whole account.
+#   langchain        how init_chat_model addresses this provider
+#     provider              model_provider passed to init_chat_model
+#     base_url_override     true: pass base_url (OpenAI-compatible hosts)
+#     supports_max_retries  false: the class rejects max_retries
+
+providers:
+
+  groq:
+    base_url: https://api.groq.com/openai/v1
+    key_env: GROQ_API_KEY
+    quota_per_model: false
+    langchain:
+      provider: groq
+
+  nvidia:
+    base_url: https://integrate.api.nvidia.com/v1
+    key_env: NVIDIA_API_KEY
+    quota_per_model: false
+    langchain:
+      provider: nvidia
+      # ChatNVIDIA has no max_retries field: passing it ends up in the request
+      # body and the API 400s on it.
+      supports_max_retries: false
+
+  google:
+    base_url: https://generativelanguage.googleapis.com/v1beta
+    key_env: GOOGLE_API_KEY
+    quota_per_model: true
+    langchain:
+      provider: google_genai
+
+  openrouter:
+    base_url: https://openrouter.ai/api/v1
+    key_env: OPENROUTER_API_KEY
+    # ":free" models draw on a pool shared by every OpenRouter user, one pool
+    # per model, so each model's availability is independent.
+    quota_per_model: true
+    langchain:
+      provider: openai               # OpenAI-compatible, no dedicated package
+      base_url_override: true
+
+  ollama:
+    base_url: http://localhost:11434/v1
+    key_env: null
+    quota_per_model: false
+    langchain:
+      provider: openai               # Ollama serves an OpenAI-compatible /v1
+      base_url_override: true
+    # Not used by any model in models.yaml yet. Add a route with
+    # provider: ollama to use a local model.

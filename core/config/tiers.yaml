@@ -1,0 +1,55 @@
+# What each tier may use, and the policy it runs under.
+#
+# Every policy field has a default and a max. A user can change their own
+# value (in the UI), but only between the field's min and the tier's max, so
+# a normal user can't give themselves ten retries.
+#
+#   retries            extra attempts on the same route after a failure that
+#                      might heal (timeout, 5xx, short rate limit). 0 = one try.
+#   timeout_s          longest wait for ONE attempt
+#   deadline_s         longest the whole request may take: every attempt,
+#                      backoff wait and fallback together
+#   daily_calls        attempts sent to a provider per day (retries count,
+#                      since each one spends provider quota). Resets at
+#                      midnight IST.
+#   daily_tokens       input + output tokens per day
+#   max_prompt_tokens  biggest conversation one request may send. A route
+#                      whose context window is smaller is skipped.
+
+tiers:
+
+  normal:
+    label: Normal
+    fallback: false          # first route only
+    models:
+      - gpt-oss-20b
+      - qwen-3.8-27b
+      - gemini-3.5-flash-lite
+      - nemotron-lightning
+    policy:
+      retries:           { default: 1,      max: 2 }
+      timeout_s:         { default: 30,     max: 30 }
+      deadline_s:        { default: 60,     max: 60 }
+      daily_calls:       { default: 50,     max: 50 }
+      daily_tokens:      { default: 100000, max: 100000 }
+      max_prompt_tokens: { default: 16000,  max: 16000 }
+
+  premium:
+    label: Premium
+    fallback: true           # try the next route when one fails
+    models:
+      - nemotron-ultra
+      - gpt-oss-120b
+      - gemini-3.6-flash
+      - nemotron-super-vl
+      - gpt-oss-20b
+      - qwen-3.8-27b
+      - gemini-3.5-flash-lite
+      - nemotron-lightning
+    policy:
+      retries:           { default: 2,       max: 5 }
+      timeout_s:         { default: 60,      max: 120 }
+      deadline_s:        { default: 120,     max: 300 }
+      daily_calls:       { default: 500,     max: 500 }
+      daily_tokens:      { default: 1000000, max: 1000000 }
+      max_prompt_tokens: { default: 128000,  max: 1000000 }

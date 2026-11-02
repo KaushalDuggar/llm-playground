@@ -15,9 +15,11 @@
     --accent-text: #ffffff;
     --user-bubble: #e8effc;
     --ok: #2e9d5b;
+    --warn: #c98a14;
     --off: #b5b4ae;
     --error-bg: #fdecec;
     --error-text: #a12626;
+    --bar: #e9e8e4;
     --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
   @media (prefers-color-scheme: dark) {
@@ -31,9 +33,11 @@
       --accent-text: #0e1420;
       --user-bubble: #22304a;
       --ok: #4cc27f;
+      --warn: #e0a83a;
       --off: #5a5954;
       --error-bg: #3a1f1f;
       --error-text: #f2a3a3;
+      --bar: #2c2c29;
     }
   }
   * { box-sizing: border-box; }
@@ -43,7 +47,7 @@
     color: var(--text);
     font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     display: grid;
-    grid-template-columns: 290px 1fr;
+    grid-template-columns: 310px 1fr;
   }
 
   /* Sidebar */
@@ -65,14 +69,26 @@
     color: var(--muted);
     margin-bottom: 8px;
   }
-  .providers { display: flex; flex-direction: column; gap: 4px; }
-  .provider {
+  .tier { margin-top: 6px; font-size: 13px; color: var(--muted); }
+  .badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  .badge.premium { border-color: var(--warn); color: var(--warn); }
+  .models { display: flex; flex-direction: column; gap: 4px; }
+  .model {
     display: grid;
     grid-template-columns: 10px 1fr;
     column-gap: 10px;
     align-items: center;
     text-align: left;
-    padding: 8px 10px;
+    padding: 7px 10px;
     border: 1px solid transparent;
     border-radius: 8px;
     background: none;
@@ -80,13 +96,34 @@
     font: inherit;
     cursor: pointer;
   }
-  .provider:hover:not(:disabled) { background: var(--bg); }
-  .provider.active { border-color: var(--accent); background: var(--bg); }
-  .provider:disabled { cursor: not-allowed; color: var(--muted); }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--off); }
-  .provider.ready .dot { background: var(--ok); }
-  .provider small { grid-column: 2; font-size: 12px; color: var(--muted); }
-  select, textarea {
+  .model:hover { background: var(--bg); }
+  .model.active { border-color: var(--accent); background: var(--bg); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .dot.partial { background: var(--warn); }
+  .dot.down { background: var(--off); }
+  .model small { grid-column: 2; font-size: 12px; color: var(--muted); font-family: var(--mono); }
+  .usage-row { font-size: 13px; margin-bottom: 8px; }
+  .usage-row .nums { display: flex; justify-content: space-between; color: var(--muted); }
+  .bar { height: 6px; background: var(--bar); border-radius: 3px; overflow: hidden; margin-top: 3px; }
+  .bar > div { height: 100%; background: var(--accent); }
+  .bar > div.full { background: var(--error-text); }
+  .resets { font-size: 12px; color: var(--muted); }
+  details summary { cursor: pointer; }
+  .policy { display: grid; gap: 10px; margin-top: 10px; }
+  .policy label { display: grid; grid-template-columns: 1fr 96px; align-items: center; gap: 8px; font-size: 13px; }
+  .policy label small { display: block; color: var(--muted); font-size: 11px; }
+  .policy .msg { font-size: 12px; color: var(--error-text); min-height: 1em; }
+  input, textarea {
+    width: 100%;
+    font: inherit;
+    color: inherit;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 8px;
+  }
+  input { font-family: var(--mono); font-size: 13px; }
+  select {
     width: 100%;
     font: inherit;
     color: inherit;
@@ -95,11 +132,9 @@
     border-radius: 8px;
     padding: 8px 10px;
   }
-  select { font-family: var(--mono); font-size: 13px; }
-  aside textarea { resize: vertical; min-height: 70px; font-size: 13px; }
-  .buttons { display: flex; gap: 8px; margin-top: auto; }
+  aside textarea { resize: vertical; min-height: 60px; font-size: 13px; }
   button.secondary {
-    flex: 1;
+    width: 100%;
     padding: 8px;
     font: inherit;
     font-size: 14px;
@@ -109,14 +144,17 @@
     border-radius: 8px;
     cursor: pointer;
   }
+  button.link {
+    background: none; border: none; padding: 0;
+    color: var(--accent); font: inherit; font-size: 12px; cursor: pointer;
+  }
 
   /* Chat */
   main { display: flex; flex-direction: column; min-width: 0; height: 100vh; }
   header {
     padding: 14px 24px;
     border-bottom: 1px solid var(--border);
-    font-family: var(--mono);
-    font-size: 13px;
+    font-size: 14px;
     color: var(--muted);
   }
   #messages {
@@ -125,9 +163,9 @@
     padding: 24px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 18px;
   }
-  .empty { margin: auto; color: var(--muted); text-align: center; }
+  .empty { margin: auto; color: var(--muted); text-align: center; max-width: 420px; }
   .msg { max-width: 760px; width: 100%; margin: 0 auto; }
   .msg .body { white-space: pre-wrap; overflow-wrap: anywhere; }
   .msg.user .body {
@@ -143,15 +181,18 @@
     color: var(--error-text);
     padding: 10px 14px;
     border-radius: 12px;
-    font-family: var(--mono);
-    font-size: 13px;
+    font-size: 14px;
   }
-  .meta {
+  .msg.error .reason { font-weight: 600; display: block; margin-bottom: 2px; }
+  .meta, .trace {
     margin-top: 6px;
     font-family: var(--mono);
     font-size: 12px;
     color: var(--muted);
   }
+  .trace div { display: grid; grid-template-columns: 16px 1fr auto; gap: 6px; overflow-wrap: anywhere; }
+  .trace .ok { color: var(--ok); }
+  .trace .fail { color: var(--error-text); }
   .pending .body { color: var(--muted); }
   form {
     display: flex;
@@ -162,7 +203,7 @@
     width: 100%;
     margin: 0 auto;
   }
-  form textarea { resize: none; height: 46px; max-height: 200px; }
+  form textarea { resize: none; height: 46px; max-height: 200px; padding: 8px 10px; }
   form button {
     padding: 0 18px;
     font: inherit;
@@ -177,7 +218,7 @@
 
   @media (max-width: 720px) {
     body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-    aside { border-right: none; border-bottom: 1px solid var(--border); max-height: 45vh; }
+    aside { border-right: none; border-bottom: 1px solid var(--border); max-height: 50vh; }
     main { height: auto; min-height: 0; }
     header, #messages, form { padding-left: 16px; padding-right: 16px; }
   }
@@ -185,27 +226,41 @@
 </head>
 <body>
 <aside>
-  <h1>LLM Playground</h1>
   <div>
-    <div class="label">Provider</div>
-    <div class="providers" id="providers"><span class="meta">Loading…</span></div>
+    <h1>LLM Playground</h1>
   </div>
+
   <div>
-    <div class="label"><label for="model">Model</label></div>
-    <select id="model"></select>
+    <div class="label"><label for="user">Acting as</label></div>
+    <select id="user"></select>
+    <div class="tier" id="tier"></div>
   </div>
+
+  <div>
+    <div class="label">Model</div>
+    <div class="models" id="models"></div>
+  </div>
+
+  <div>
+    <div class="label">Today's budget</div>
+    <div id="usage"></div>
+  </div>
+
+  <details id="policy-box">
+    <summary class="label" style="display:list-item">Policy</summary>
+    <div class="policy" id="policy"></div>
+  </details>
+
   <div>
     <div class="label"><label for="system">System prompt</label></div>
     <textarea id="system" placeholder="Optional"></textarea>
   </div>
-  <div class="buttons">
-    <button class="secondary" id="new-chat" type="button">New chat</button>
-    <button class="secondary" id="refresh" type="button">Refresh</button>
-  </div>
+
+  <button class="secondary" id="new-chat" type="button">New chat</button>
 </aside>
 
 <main>
-  <header id="current">No model selected</header>
+  <header id="current">Loading…</header>
   <div id="messages"></div>
   <form id="composer">
     <textarea id="input" placeholder="Message (Enter to send, Shift+Enter for a new line)"></textarea>
@@ -220,66 +275,161 @@
     set(k, v) { try { localStorage.setItem(k, v); } catch {} },
   };
 
-  let providers = [];
-  let provider = null;          // selected provider object
-  // Each entry: {role, content} plus `meta` on replies; errors are shown but never sent.
+  const POLICY_LABELS = {
+    retries: ["Retries", "extra tries on the same route"],
+    timeout_s: ["Timeout (s)", "longest wait for one attempt"],
+    deadline_s: ["Deadline (s)", "longest the whole request may take"],
+    daily_calls: ["Calls per day", "every attempt counts"],
+    daily_tokens: ["Tokens per day", "input + output"],
+    max_prompt_tokens: ["Max prompt tokens", "biggest conversation per request"],
+  };
+  const REASONS = {
+    not_allowed: "Not on your tier",
+    prompt_too_long: "Conversation too long",
+    budget: "Daily budget used up",
+    bad_request: "Bad request",
+    deadline: "Deadline reached",
+    all_routes_failed: "All routes failed",
+  };
+
+  let info = null;              // /api/users/{id}: tier, models, policy, usage
+  let model = null;             // selected named model
+  // Each entry: {role, content} plus meta/trace on replies; errors are shown but never sent.
   let messages = [];
   let busy = false;
 
-  async function loadProviders() {
-    $("providers").innerHTML = '<span class="meta">Loading…</span>';
-    providers = await (await fetch("/api/providers")).json();
-    const saved = store.get("provider");
-    const initial = providers.find(p => p.name === saved && p.ready) || providers.find(p => p.ready);
-    renderProviders();
-    if (initial) selectProvider(initial.name, store.get("model"));
-    else renderModels();
+  const num = (n) => n.toLocaleString();
+
+  async function loadUsers() {
+    const users = await (await fetch("/api/users")).json();
+    const select = $("user");
+    for (const u of users) select.add(new Option(`${u.name} · ${u.tier}`, u.id));
+    const saved = store.get("user");
+    if (users.some(u => u.id === saved)) select.value = saved;
+    await loadUser();
   }
 
-  function renderProviders() {
-    const list = $("providers");
+  async function loadUser() {
+    const id = $("user").value;
+    store.set("user", id);
+    info = await (await fetch(`/api/users/${id}`)).json();
+    const saved = store.get(`model:${id}`);
+    model = info.models.find(m => m.name === (model || saved)) ? (model || saved) : info.models[0].name;
+    render();
+  }
+
+  function render() {
+    const t = info.tier;
+    $("tier").innerHTML = "";
+    const badge = document.createElement("span");
+    badge.className = "badge" + (t.name === "premium" ? " premium" : "");
+    badge.textContent = t.label;
+    $("tier").append(badge, ` · fallback ${t.fallback ? "on" : "off"}`);
+    renderModels();
+    renderUsage();
+    renderPolicy();
+    renderHeader();
+  }
+
+  function renderModels() {
+    const list = $("models");
     list.innerHTML = "";
-    for (const p of providers) {
+    for (const m of info.models) {
+      const down = m.routes.filter(r => r.unavailable);
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = "provider" + (p.ready ? " ready" : "") + (provider?.name === p.name ? " active" : "");
-      btn.disabled = !p.ready;
+      btn.className = "model" + (m.name === model ? " active" : "");
       btn.innerHTML = '<span class="dot"></span><span></span><small></small>';
-      btn.children[1].textContent = p.label;
-      btn.children[2].textContent = p.ready ? `${p.models.length} models` : p.reason;
-      btn.onclick = () => selectProvider(p.name);
+      btn.children[0].className = "dot" + (down.length === m.routes.length ? " down" : down.length ? " partial" : "");
+      btn.children[1].textContent = m.label;
+      btn.children[2].textContent = m.routes.map(r => r.provider).join(" → ");
+      btn.title = m.routes.map(r => `${r.provider}: ${r.model}  (${num(r.context_window)} ctx)` +
+        (r.unavailable ? `\n  ✗ ${r.unavailable}` : "")).join("\n");
+      btn.onclick = () => { model = m.name; store.set(`model:${info.user.id}`, model); renderModels(); renderHeader(); };
       list.appendChild(btn);
     }
   }
 
-  function selectProvider(name, preferredModel) {
-    provider = providers.find(p => p.name === name);
-    store.set("provider", name);
-    renderProviders();
-    renderModels(preferredModel);
+  function renderUsage() {
+    const u = info.usage, p = info.policy;
+    const row = (label, used, limit) => {
+      const pct = Math.min(100, (used / limit) * 100);
+      return `<div class="usage-row"><div class="nums"><span>${label}</span><span>${num(used)} / ${num(limit)}</span></div>
+        <div class="bar"><div class="${pct >= 100 ? "full" : ""}" style="width:${pct}%"></div></div></div>`;
+    };
+    $("usage").innerHTML = row("Calls", u.calls, p.daily_calls.value) +
+      row("Tokens", u.tokens, p.daily_tokens.value) +
+      `<div class="resets">Resets ${u.resets_at}</div>`;
   }
 
-  function renderModels(preferredModel) {
-    const select = $("model");
-    select.innerHTML = "";
-    for (const m of provider?.models || []) select.add(new Option(m, m));
-    if (preferredModel && provider?.models.includes(preferredModel)) select.value = preferredModel;
-    select.disabled = !provider;
-    onModelChange();
+  function renderPolicy() {
+    const box = $("policy");
+    box.innerHTML = "";
+    for (const [field, f] of Object.entries(info.policy)) {
+      const [label, hint] = POLICY_LABELS[field];
+      const row = document.createElement("label");
+      row.innerHTML = `<span>${label}<small>${hint} · default ${num(f.default)}, max ${num(f.max)}</small></span>`;
+      const input = document.createElement("input");
+      input.type = "number";
+      input.min = f.min;
+      input.max = f.max;
+      input.value = f.value;
+      input.onchange = () => savePolicy(field, input.value === "" ? null : Number(input.value));
+      row.appendChild(input);
+      box.appendChild(row);
+    }
+    const foot = document.createElement("div");
+    foot.innerHTML = '<div class="msg" id="policy-msg"></div>';
+    const reset = document.createElement("button");
+    reset.className = "link";
+    reset.type = "button";
+    reset.textContent = "Reset all to tier defaults";
+    reset.onclick = async () => { for (const f of Object.keys(info.policy)) await savePolicy(f, null); };
+    foot.appendChild(reset);
+    box.appendChild(foot);
   }
 
-  function onModelChange() {
-    const model = $("model").value;
-    if (model) store.set("model", model);
-    $("current").textContent = provider && model ? `${provider.label} · ${model}` : "No model selected";
-    $("send").disabled = busy || !model;
+  async function savePolicy(field, value) {
+    const res = await fetch(`/api/users/${info.user.id}/policy`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ field, value }),
+    });
+    const data = await res.json();
+    if (!res.ok) { $("policy-msg").textContent = data.detail; return; }
+    info = data;
+    render();
+    $("policy-box").open = true;
+  }
+
+  function renderHeader() {
+    const m = info.models.find(m => m.name === model);
+    $("current").textContent = `${info.user.name} (${info.tier.label}) · ${m ? m.label : "no model"}`;
+    $("send").disabled = busy || !m;
+  }
+
+  function traceEl(attempts) {
+    const el = document.createElement("div");
+    el.className = "trace";
+    for (const a of attempts) {
+      const row = document.createElement("div");
+      const mark = a.outcome === "ok" ? "✓" : a.outcome === "skipped" ? "–" : "✗";
+      row.innerHTML = "<span></span><span></span><span></span>";
+      row.children[0].textContent = mark;
+      row.children[0].className = a.outcome === "ok" ? "ok" : a.outcome === "skipped" ? "" : "fail";
+      row.children[1].textContent = `${a.provider} ${a.outcome}${a.detail ? " · " + a.detail : ""}`;
+      row.children[2].textContent = a.outcome === "skipped" ? "" : `${(a.latency_ms / 1000).toFixed(1)}s`;
+      el.appendChild(row);
+    }
+    return el;
   }
 
   function renderMessages() {
     const box = $("messages");
     box.innerHTML = "";
     if (!messages.length) {
-      box.innerHTML = '<div class="empty">Pick a provider and model, then say something.<br>You can switch models mid-conversation.</div>';
+      box.innerHTML = '<div class="empty">Pick a model and say something.<br>Switch users to see how the Normal and Premium tiers differ. ' +
+        'Every reply shows each attempt the gateway made.</div>';
       return;
     }
     for (const m of messages) {
@@ -287,13 +437,23 @@
       el.className = `msg ${m.role}`;
       const body = document.createElement("div");
       body.className = "body";
-      body.textContent = m.content;
+      if (m.reason) {
+        const r = document.createElement("span");
+        r.className = "reason";
+        r.textContent = REASONS[m.reason] || m.reason;
+        body.appendChild(r);
+      }
+      body.append(m.content);
       el.appendChild(body);
       if (m.meta) {
         const meta = document.createElement("div");
         meta.className = "meta";
         meta.textContent = m.meta;
         el.appendChild(meta);
+      }
+      // A single clean success needs no trace; anything else shows every step.
+      if (m.attempts && (m.attempts.length > 1 || m.attempts[0].outcome !== "ok")) {
+        el.appendChild(traceEl(m.attempts));
       }
       box.appendChild(el);
     }
@@ -303,14 +463,13 @@
   function describe(r) {
     return [
       `${r.provider}:${r.model}`,
-      `${Math.round(r.latency_ms).toLocaleString()} ms`,
-      `${r.input_tokens} in → ${r.output_tokens} out`,
-      `${r.tokens_per_sec.toFixed(1)} tok/s`,
+      `${(r.latency_ms / 1000).toFixed(1)}s`,
+      `${num(r.input_tokens)} in → ${num(r.output_tokens)} out`,
     ].join("  ·  ");
   }
 
   async function send(text) {
-    const model = $("model").value;
+    const chosen = model;
     messages.push({ role: "user", content: text });
     const history = messages
       .filter(m => m.role === "user" || m.role === "assistant")
@@ -318,38 +477,39 @@
     const system = $("system").value.trim();
     if (system) history.unshift({ role: "system", content: system });
 
-    const pending = { role: "assistant pending", content: `Waiting for ${model}…` };
-    messages.push(pending);
+    messages.push({ role: "assistant pending", content: "Waiting…" });
     busy = true;
-    onModelChange();
+    renderHeader();
     renderMessages();
 
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider: provider.name, model, messages: history }),
+        body: JSON.stringify({ user: info.user.id, model: chosen, messages: history }),
       });
       const data = await res.json();
       messages.pop();
-      if (res.ok) messages.push({ role: "assistant", content: data.text, meta: describe(data) });
-      else messages.push({ role: "error", content: data.detail, meta: `${provider.name}:${model}` });
+      if (res.ok) {
+        messages.push({ role: "assistant", content: data.text, meta: describe(data), attempts: data.attempts });
+      } else {
+        messages.push({ role: "error", reason: data.reason, content: data.detail, attempts: data.attempts });
+      }
     } catch (err) {
       messages.pop();
       messages.push({ role: "error", content: `Could not reach the server: ${err.message}` });
     }
     busy = false;
-    onModelChange();
+    await loadUser();   // usage and route health have changed
     renderMessages();
   }
 
-  $("model").onchange = onModelChange;
-  $("refresh").onclick = loadProviders;
+  $("user").onchange = () => { model = null; messages = []; loadUser(); renderMessages(); };
   $("new-chat").onclick = () => { messages = []; renderMessages(); $("input").focus(); };
   $("composer").onsubmit = (e) => {
     e.preventDefault();
     const text = $("input").value.trim();
-    if (!text || busy || !$("model").value) return;
+    if (!text || busy || !model) return;
     $("input").value = "";
     send(text);
   };
@@ -361,7 +521,7 @@
   };
 
   renderMessages();
-  loadProviders();
+  loadUsers();
 </script>
 </body>
 </html>
