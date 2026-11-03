@@ -194,6 +194,7 @@
   .trace .ok { color: var(--ok); }
   .trace .fail { color: var(--error-text); }
   .pending .body { color: var(--muted); }
+  .msg.failed .body { opacity: .55; }
   .context {
     max-width: 760px;
     width: calc(100% - 48px);
@@ -430,8 +431,10 @@
 
   // What the next request would send: system prompt, history, and the draft.
   function nextRequest() {
+    // A message that got an error instead of a reply stays on screen but is
+    // never sent again: the model would see a question with no answer.
     const msgs = messages
-      .filter(m => m.role === "user" || m.role === "assistant")
+      .filter(m => (m.role === "user" || m.role === "assistant") && !m.failed)
       .map(({ role, content }) => ({ role, content }));
     const system = $("system").value.trim();
     if (system) msgs.unshift({ role: "system", content: system });
@@ -485,7 +488,7 @@
     }
     for (const m of messages) {
       const el = document.createElement("div");
-      el.className = `msg ${m.role}`;
+      el.className = `msg ${m.role}${m.failed ? " failed" : ""}`;
       const body = document.createElement("div");
       body.className = "body";
       if (m.reason) {
@@ -503,7 +506,9 @@
         el.appendChild(meta);
       }
       // A single clean success needs no trace; anything else shows every step.
-      if (m.attempts && (m.attempts.length > 1 || m.attempts[0].outcome !== "ok")) {
+      // Errors raised before any model was called (too long, budget, tier)
+      // have no attempts at all.
+      if (m.attempts?.length && (m.attempts.length > 1 || m.attempts[0].outcome !== "ok")) {
         el.appendChild(traceEl(m.attempts));
       }
       box.appendChild(el);
@@ -522,21 +527,23 @@
 
   async function send(text) {
     const chosen = model;
-    messages.push({ role: "user", content: text });
+    const userMsg = { role: "user", content: text };
+    messages.push(userMsg);
     const history = nextRequest();   // the draft box is already cleared
-
-    messages.push({ role: "assistant pending", content: "Waiting…" });
+    const pending = { role: "assistant pending", content: "Waiting…" };
+    messages.push(pending);
     busy = true;
-    renderHeader();
-    renderMessages();
 
     // The server stops itself at the deadline; this is the browser's own
     // backstop in case the server never answers at all.
     const giveUpAfter = (info.policy.deadline_s.value + 30) * 1000;
     const abort = new AbortController();
     const timer = setTimeout(() => abort.abort(), giveUpAfter);
+    let reply;
 
     try {
+      renderHeader();
+      renderMessages();
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -544,26 +551,29 @@
         signal: abort.signal,
       });
       const data = await res.json();
-      messages.pop();
-      if (res.ok) {
-        messages.push({ role: "assistant", content: replyText(data), meta: describe(data), attempts: data.attempts });
-      } else {
-        messages.push({ role: "error", reason: data.reason, content: data.detail, attempts: data.attempts });
-      }
+      reply = res.ok
+        ? { role: "assistant", content: replyText(data), meta: describe(data), attempts: data.attempts }
+        : { role: "error", reason: data.reason, content: data.detail, attempts: data.attempts };
     } catch (err) {
-      messages.pop();
-      messages.push({
+      reply = {
         role: "error",
         content: err.name === "AbortError"
           ? `No response from the server after ${giveUpAfter / 1000}s. Check the terminal running uvicorn.`
-          : `Could not reach the server: ${err.message}`,
-      });
+          : `Something went wrong: ${err.message}`,
+      };
+    } finally {
+      // Whatever happened above, the chat must come back to a usable state.
+      clearTimeout(timer);
+      messages.splice(messages.indexOf(pending), 1, reply);
+      if (reply.role === "error") {
+        userMsg.failed = true;
+        // Hand the text back so it can be sent again after fixing the cause.
+        if (!$("input").value.trim()) $("input").value = text;
+      }
+      busy = false;
+      renderMessages();
+      renderHeader();
     }
-    clearTimeout(timer);
-    busy = false;
-    // Show the reply first: a failure while refreshing the sidebar must
-    // never leave the chat stuck on "Waiting…".
-    renderMessages();
     try { await loadUser(); } catch (err) { console.error("refreshing user failed", err); }
   }
 
