@@ -1,0 +1,10 @@
+# Demo users. There is no login: the UI lets you act as any of them, which is
+# enough to see tiers and policies at work.
+
+users:
+  asha:
+    name: Asha
+    tier: normal
+  ravi:
+    name: Ravi
+    tier: premium
