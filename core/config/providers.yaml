@@ -20,7 +20,10 @@ providers:
   groq:
     base_url: https://api.groq.com/openai/v1
     key_env: GROQ_API_KEY
-    quota_per_model: false
+    # Groq's limits are per model within the organisation: its 429s read
+    # "limit for model `qwen/qwen3.8-27b` in organization ...". A limit on
+    # one model must not cool down the others.
+    quota_per_model: true
     langchain:
       provider: groq
 

@@ -194,6 +194,18 @@
   .trace .ok { color: var(--ok); }
   .trace .fail { color: var(--error-text); }
   .pending .body { color: var(--muted); }
+  .context {
+    max-width: 760px;
+    width: calc(100% - 48px);
+    margin: 0 auto;
+    padding-top: 10px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .context .nums { display: flex; justify-content: space-between; gap: 12px; }
+  .context.over { color: var(--error-text); }
+  .context .bar > div.near { background: var(--warn); }
   form {
     display: flex;
     gap: 10px;
@@ -262,6 +274,7 @@
 <main>
   <header id="current">Loading…</header>
   <div id="messages"></div>
+  <div class="context" id="context"></div>
   <form id="composer">
     <textarea id="input" placeholder="Message (Enter to send, Shift+Enter for a new line)"></textarea>
     <button id="send" type="submit">Send</button>
@@ -282,6 +295,7 @@
     daily_calls: ["Calls per day", "every attempt counts"],
     daily_tokens: ["Tokens per day", "input + output"],
     max_prompt_tokens: ["Max prompt tokens", "biggest conversation per request"],
+    max_output_tokens: ["Max output tokens", "longest answer, thinking included"],
   };
   const REASONS = {
     not_allowed: "Not on your tier",
@@ -366,7 +380,8 @@
     const box = $("policy");
     box.innerHTML = "";
     for (const [field, f] of Object.entries(info.policy)) {
-      const [label, hint] = POLICY_LABELS[field];
+      // A field added on the server but not named here still gets a row.
+      const [label, hint] = POLICY_LABELS[field] || [field, ""];
       const row = document.createElement("label");
       row.innerHTML = `<span>${label}<small>${hint} · default ${num(f.default)}, max ${num(f.max)}</small></span>`;
       const input = document.createElement("input");
@@ -406,6 +421,42 @@
     const m = info.models.find(m => m.name === model);
     $("current").textContent = `${info.user.name} (${info.tier.label}) · ${m ? m.label : "no model"}`;
     $("send").disabled = busy || !m;
+    renderContext();
+  }
+
+  // Same rule as gateway.estimate_tokens, so the meter and the server agree
+  // on when a conversation is too long.
+  const estimateTokens = (msgs) => msgs.reduce((n, m) => n + Math.floor(m.content.length / 4) + 4, 0);
+
+  // What the next request would send: system prompt, history, and the draft.
+  function nextRequest() {
+    const msgs = messages
+      .filter(m => m.role === "user" || m.role === "assistant")
+      .map(({ role, content }) => ({ role, content }));
+    const system = $("system").value.trim();
+    if (system) msgs.unshift({ role: "system", content: system });
+    const draft = $("input").value.trim();
+    if (draft) msgs.push({ role: "user", content: draft });
+    return msgs;
+  }
+
+  function renderContext() {
+    const box = $("context");
+    const m = info && info.models.find(m => m.name === model);
+    if (!m) { box.innerHTML = ""; return; }
+    const used = estimateTokens(nextRequest());
+    const policyLimit = info.policy.max_prompt_tokens.value;
+    const limit = Math.min(policyLimit, m.context_window);
+    const source = limit === policyLimit ? "your Max prompt tokens" : `${m.label}'s context window`;
+    const pct = Math.min(100, (used / limit) * 100);
+    const over = used > limit;
+    box.className = "context" + (over ? " over" : "");
+    box.innerHTML = `<div class="nums"><span></span><span></span></div>
+      <div class="bar"><div class="${over ? "full" : pct >= 80 ? "near" : ""}" style="width:${pct}%"></div></div>`;
+    box.querySelector(".nums").children[0].textContent = over
+      ? "Over the limit: start a new chat or raise Max prompt tokens"
+      : `Context (limit: ${source})`;
+    box.querySelector(".nums").children[1].textContent = `~${num(used)} / ${num(limit)} tokens`;
   }
 
   function traceEl(attempts) {
@@ -465,47 +516,69 @@
       `${r.provider}:${r.model}`,
       `${(r.latency_ms / 1000).toFixed(1)}s`,
       `${num(r.input_tokens)} in → ${num(r.output_tokens)} out`,
+      ...(r.truncated ? [`⚠ cut off at the ${num(r.max_output_tokens)}-token limit`] : []),
     ].join("  ·  ");
   }
 
   async function send(text) {
     const chosen = model;
     messages.push({ role: "user", content: text });
-    const history = messages
-      .filter(m => m.role === "user" || m.role === "assistant")
-      .map(({ role, content }) => ({ role, content }));
-    const system = $("system").value.trim();
-    if (system) history.unshift({ role: "system", content: system });
+    const history = nextRequest();   // the draft box is already cleared
 
     messages.push({ role: "assistant pending", content: "Waiting…" });
     busy = true;
     renderHeader();
     renderMessages();
 
+    // The server stops itself at the deadline; this is the browser's own
+    // backstop in case the server never answers at all.
+    const giveUpAfter = (info.policy.deadline_s.value + 30) * 1000;
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), giveUpAfter);
+
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user: info.user.id, model: chosen, messages: history }),
+        signal: abort.signal,
       });
       const data = await res.json();
       messages.pop();
       if (res.ok) {
-        messages.push({ role: "assistant", content: data.text, meta: describe(data), attempts: data.attempts });
+        messages.push({ role: "assistant", content: replyText(data), meta: describe(data), attempts: data.attempts });
       } else {
         messages.push({ role: "error", reason: data.reason, content: data.detail, attempts: data.attempts });
       }
     } catch (err) {
       messages.pop();
-      messages.push({ role: "error", content: `Could not reach the server: ${err.message}` });
+      messages.push({
+        role: "error",
+        content: err.name === "AbortError"
+          ? `No response from the server after ${giveUpAfter / 1000}s. Check the terminal running uvicorn.`
+          : `Could not reach the server: ${err.message}`,
+      });
     }
+    clearTimeout(timer);
     busy = false;
-    await loadUser();   // usage and route health have changed
+    // Show the reply first: a failure while refreshing the sidebar must
+    // never leave the chat stuck on "Waiting…".
     renderMessages();
+    try { await loadUser(); } catch (err) { console.error("refreshing user failed", err); }
+  }
+
+  function replyText(r) {
+    if (r.text.trim()) return r.text;
+    return r.truncated
+      ? `(No answer: the model used its whole ${num(r.max_output_tokens)}-token output limit thinking before ` +
+        "it wrote anything. Raise Max output tokens in Policy.)"
+      : "(The model returned an empty answer.)";
   }
 
   $("user").onchange = () => { model = null; messages = []; loadUser(); renderMessages(); };
-  $("new-chat").onclick = () => { messages = []; renderMessages(); $("input").focus(); };
+  $("new-chat").onclick = () => { messages = []; renderMessages(); renderContext(); $("input").focus(); };
+  $("input").oninput = renderContext;
+  $("system").oninput = renderContext;
   $("composer").onsubmit = (e) => {
     e.preventDefault();
     const text = $("input").value.trim();

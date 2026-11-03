@@ -17,6 +17,10 @@ classes.
                      another route either: it would fail there too.
     CONTEXT_LENGTH   too long for this model. Another route with a bigger
                      window might take it.
+    TOO_LARGE        this one request needs more than the route's whole
+                     per-minute token allowance (Groq: "Request too large").
+                     Waiting won't shrink it: don't retry; another route, or a
+                     lower max_output_tokens, might fit.
 
 Ported from llm-factory's factory/errors.py, which was checked against real
 failures. Changed here: TIMEOUT and NOT_FOUND are their own categories
@@ -39,6 +43,7 @@ class ErrorCategory(str, Enum):
     NOT_FOUND = "not_found"
     BAD_REQUEST = "bad_request"
     CONTEXT_LENGTH = "context_length"
+    TOO_LARGE = "too_large"
 
 
 # Not every SDK hands back a clean status code (NVIDIA raises a bare
@@ -91,6 +96,10 @@ def classify(exc: Exception) -> ErrorCategory:
     status = _status(exc)
     message = str(exc)
 
+    # Checked before the status code: Groq sends this as a 429 or a 413,
+    # and as a 429 it would otherwise look like an ordinary rate limit.
+    if "request too large" in message.lower():
+        return ErrorCategory.TOO_LARGE
     if status == 400:
         if _is_context_length(message):
             return ErrorCategory.CONTEXT_LENGTH

@@ -52,6 +52,8 @@ class GatewayResult:
     latency_ms: float       # the whole request: every attempt and wait
     input_tokens: int
     output_tokens: int
+    max_output_tokens: int  # the cap this answer ran under
+    truncated: bool         # stopped at that cap rather than finishing
     attempts: list[Attempt] = field(default_factory=list)
 
 
@@ -128,6 +130,7 @@ def call(user_id: str, named_model: str, messages: list[dict]) -> GatewayResult:
             attempts.append(Attempt(route.provider.name, route.model, "skipped", skip))
             continue
 
+        max_tokens = min(policy["max_output_tokens"], route.max_output_tokens or policy["max_output_tokens"])
         for attempt_no in range(policy["retries"] + 1):
             if time_left() <= 0:
                 raise GatewayError(
@@ -145,7 +148,8 @@ def call(user_id: str, named_model: str, messages: list[dict]) -> GatewayResult:
             try:
                 # Never let one attempt run past the deadline.
                 result = client.chat(route.provider, route.model, messages,
-                                     timeout=min(policy["timeout_s"], time_left()))
+                                     timeout=min(policy["timeout_s"], time_left()),
+                                     max_tokens=max_tokens)
             except Exception as exc:
                 category = classify(exc)
                 detail = _short(exc)
@@ -180,6 +184,8 @@ def call(user_id: str, named_model: str, messages: list[dict]) -> GatewayResult:
                 latency_ms=_ms(start),
                 input_tokens=result.input_tokens,
                 output_tokens=result.output_tokens,
+                max_output_tokens=max_tokens,
+                truncated=result.truncated,
                 attempts=attempts,
             )
 
@@ -195,7 +201,8 @@ def call(user_id: str, named_model: str, messages: list[dict]) -> GatewayResult:
         )
     raise GatewayError(
         "all_routes_failed",
-        f"Gave up after {_count(attempts)} attempts (retries used up). Last error: {_last_error(attempts)}",
+        f"Gave up after {_count(attempts)} attempts (retries used up). Last error: {_last_error(attempts)}"
+        f"{_hint(attempts)}",
         attempts,
     )
 
@@ -261,6 +268,9 @@ def describe(user_id: str) -> dict:
         models.append({
             "name": name,
             "label": m.label,
+            # The biggest prompt any usable route takes; smaller routes are
+            # skipped, so this is the model's real ceiling.
+            "context_window": max(r.context_window for r in routes),
             "routes": [
                 {"provider": r.provider.name, "model": r.model, "context_window": r.context_window,
                  "unavailable": _skip_reason(r, 0)}
@@ -291,6 +301,19 @@ def _last_error(attempts: list[Attempt]) -> str:
         return "none"
     a = failed[-1]
     return f"{a.provider} {a.outcome}: {a.detail}"
+
+
+_HINTS = {
+    ErrorCategory.TOO_LARGE.value: " The answer limit is bigger than this host allows per minute: "
+                                   "lower Max output tokens in your policy.",
+    ErrorCategory.CONTEXT_LENGTH.value: " The conversation is too long for this model: start a new chat.",
+}
+
+
+def _hint(attempts: list[Attempt]) -> str:
+    """What the user can do about the last failure, when there is something."""
+    failed = [a for a in attempts if a.outcome not in ("ok", "skipped")]
+    return _HINTS.get(failed[-1].outcome, "") if failed else ""
 
 
 def _short(exc: Exception) -> str:

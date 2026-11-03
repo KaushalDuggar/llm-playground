@@ -23,6 +23,7 @@ class LLMResult:
     latency_ms: float      # wall-clock time for the whole call, as the user feels it
     input_tokens: int
     output_tokens: int
+    truncated: bool = False  # stopped at max_tokens rather than finishing
 
     @property
     def tokens_per_sec(self) -> float:
@@ -31,7 +32,8 @@ class LLMResult:
         return self.output_tokens / (self.latency_ms / 1000) if self.latency_ms > 0 else 0.0
 
 
-def get_chat_model(provider: Provider, model: str, timeout: float | None = None) -> BaseChatModel:
+def get_chat_model(provider: Provider, model: str, timeout: float | None = None,
+                   max_tokens: int | None = None) -> BaseChatModel:
     """The only place provider quirks get translated into a chat model.
 
     max_retries=0 because the SDKs retry rate limits on their own, which
@@ -50,12 +52,17 @@ def get_chat_model(provider: Provider, model: str, timeout: float | None = None)
         # Every class here accepts `timeout`; for most it is how long the
         # connection may sit silent, not a cap on the whole call.
         kwargs["timeout"] = timeout
+    if max_tokens is not None:
+        # Set here, not with .bind() per call: Google's class only accepts
+        # it at construction and rejects it as a call argument.
+        kwargs["max_tokens"] = max_tokens
     return init_chat_model(**kwargs)
 
 
-def chat(provider: Provider, model: str, messages: list[dict], timeout: float | None = None) -> LLMResult:
+def chat(provider: Provider, model: str, messages: list[dict], timeout: float | None = None,
+         max_tokens: int | None = None) -> LLMResult:
     """Send a conversation, as [{"role": ..., "content": ...}], to one model."""
-    llm = get_chat_model(provider, model, timeout)
+    llm = get_chat_model(provider, model, timeout, max_tokens)
 
     start = time.perf_counter()
     resp = llm.invoke(messages)
@@ -69,4 +76,6 @@ def chat(provider: Provider, model: str, messages: list[dict], timeout: float | 
         latency_ms=latency_ms,
         input_tokens=usage.get("input_tokens", 0),
         output_tokens=usage.get("output_tokens", 0),
+        # "length" from OpenAI-style APIs, "MAX_TOKENS" from Google.
+        truncated=str(resp.response_metadata.get("finish_reason", "")).lower() in ("length", "max_tokens"),
     )

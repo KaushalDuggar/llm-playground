@@ -9,6 +9,10 @@
 # context_window is the most tokens the route accepts as input. It is per
 # route because hosts can cap the same model differently.
 #
+# max_output_tokens (optional) caps the answer length on this route, below
+# the user's policy if lower. Only set where a host's own limit makes larger
+# requests fail.
+#
 # Only models that answered reliably on 2026-11-02 are listed. Left out, and
 # why: Gemini Pro models (429, not on the free tier), gemini-3.7/3.8-flash
 # (503s and 75s waits), gemini-flash-latest (97-345s replies), NVIDIA's
@@ -68,6 +72,10 @@ models:
       - provider: groq
         model: qwen/qwen3.8-27b
         context_window: 131072
+        # Groq's free tier allows this model 1,000 output tokens per minute
+        # and reserves max_tokens up front, so asking for more is rejected
+        # as "Request too large" (seen 2026-11-03).
+        max_output_tokens: 1000
 
   gemini-3.5-flash-lite:
     label: Gemini 3.5 Flash Lite

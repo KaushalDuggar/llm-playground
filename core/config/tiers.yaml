@@ -15,6 +15,11 @@
 #   daily_tokens       input + output tokens per day
 #   max_prompt_tokens  biggest conversation one request may send. A route
 #                      whose context window is smaller is skipped.
+#   max_output_tokens  longest answer, sent to the provider as max_tokens.
+#                      Reasoning models spend part of this thinking before
+#                      they write, so set it too low and the answer comes back
+#                      cut off, or empty. Providers also reserve it against
+#                      their per-minute limits, so bigger isn't free either.
 
 tiers:
 
@@ -33,6 +38,7 @@ tiers:
       daily_calls:       { default: 50,     max: 50 }
       daily_tokens:      { default: 100000, max: 100000 }
       max_prompt_tokens: { default: 16000,  max: 16000 }
+      max_output_tokens: { default: 2000,   max: 4000 }
 
   premium:
     label: Premium
@@ -53,3 +59,4 @@ tiers:
       daily_calls:       { default: 500,     max: 500 }
       daily_tokens:      { default: 1000000, max: 1000000 }
       max_prompt_tokens: { default: 128000,  max: 1000000 }
+      max_output_tokens: { default: 4000,    max: 16000 }

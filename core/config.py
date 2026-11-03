@@ -14,7 +14,8 @@ import yaml
 
 CONFIG_DIR = Path(__file__).with_name("config")
 
-POLICY_FIELDS = ("retries", "timeout_s", "deadline_s", "daily_calls", "daily_tokens", "max_prompt_tokens")
+POLICY_FIELDS = ("retries", "timeout_s", "deadline_s", "daily_calls", "daily_tokens",
+                 "max_prompt_tokens", "max_output_tokens")
 
 
 @dataclass
@@ -43,6 +44,7 @@ class Route:
     provider: Provider
     model: str                   # the provider's own spelling of the model id
     context_window: int
+    max_output_tokens: int | None = None   # host's own cap, if lower than policy
 
     @property
     def key(self) -> str:
@@ -120,7 +122,8 @@ def load() -> Config:
         for r in spec["routes"]:
             if r["provider"] not in providers:
                 raise ValueError(f"model '{name}': unknown provider '{r['provider']}'")
-            routes.append(Route(providers[r["provider"]], r["model"], r["context_window"]))
+            routes.append(Route(providers[r["provider"]], r["model"], r["context_window"],
+                                r.get("max_output_tokens")))
         models[name] = NamedModel(name, spec["label"], routes)
 
     tiers = {}
